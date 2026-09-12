@@ -29,13 +29,20 @@ Used by:
 """
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "models"))
 from mission_profile import build_rpm_and_phase_trace  # noqa: E402
-from physics_engine import BASELINE, lag_step, physics_informed_readings  # noqa: E402
+from physics_engine import (  # noqa: E402
+    BASELINE,
+    calculate_thermodynamics,
+    compute_residuals,
+    lag_step,
+    physics_informed_readings,
+)
 
 
 class EngineUnitSimulator:
@@ -65,6 +72,11 @@ class EngineUnitSimulator:
         self._cht_alpha = BASELINE.get("cht_thermal_alpha", 0.03)
         self._oil_temp_alpha = BASELINE.get("oil_temp_thermal_alpha", 0.02)
 
+        # Parallel virtual nominal twin state (ideal physics observer baseline)
+        self._nominal_cht_lag = ambient_c
+        self._nominal_oil_temp_lag = ambient_c
+        self._last_rpm = BASELINE["rpm_idle"]
+
     @property
     def n_cycles(self) -> int:
         return len(self._rpm_trace)
@@ -77,6 +89,7 @@ class EngineUnitSimulator:
         """
         idx = self.cycle % self.n_cycles
         rpm = float(self._rpm_trace[idx] + self.rng.normal(0, 15))
+        self._last_rpm = rpm
         sensors = physics_informed_readings(rpm, self.ambient_c)
 
         # Sensors with no meaningful thermal mass: noise applied immediately.
@@ -90,6 +103,7 @@ class EngineUnitSimulator:
         frame = {
             "unit_id": self.unit_id,
             "cycle": self.cycle,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "phase": self._phase_trace[idx],
             "sensors": sensors,
         }
@@ -111,11 +125,39 @@ class EngineUnitSimulator:
         s["oil_temp_c"] = self._oil_temp_lag + float(self.rng.normal(0, 1.0))
         return s
 
+    def observe(self, finalized_sensors: dict) -> dict:
+        """
+        Digital Twin State Observer:
+        Runs the clean nominal virtual twin in lockstep with the engine RPM,
+        and computes:
+          1. Physics residuals (Delta = Sensor_meas - Sensor_nominal)
+          2. Normalized discrepancy score (physical model divergence)
+          3. Thermodynamic performance indicators (Brake Power, Torque, BSFC, Thermal Efficiency)
+        """
+        rpm = finalized_sensors.get("rpm", self._last_rpm)
+        nominal_raw = physics_informed_readings(rpm, self.ambient_c)
+        self._nominal_cht_lag = lag_step(self._nominal_cht_lag, nominal_raw["cht_c"], self._cht_alpha)
+        self._nominal_oil_temp_lag = lag_step(self._nominal_oil_temp_lag, nominal_raw["oil_temp_c"], self._oil_temp_alpha)
+
+        nominal_state = dict(nominal_raw)
+        nominal_state["cht_c"] = self._nominal_cht_lag
+        nominal_state["oil_temp_c"] = self._nominal_oil_temp_lag
+
+        residuals = compute_residuals(finalized_sensors, nominal_state)
+        thermodynamics = calculate_thermodynamics(finalized_sensors)
+
+        return {
+            "residuals": residuals,
+            "thermodynamics": thermodynamics,
+        }
+
     def reset(self) -> None:
         """Restart the mission from cycle 0 and re-cold-start thermal state."""
         self.cycle = 0
         self._cht_lag = self.ambient_c
         self._oil_temp_lag = self.ambient_c
+        self._nominal_cht_lag = self.ambient_c
+        self._nominal_oil_temp_lag = self.ambient_c
 
 
 if __name__ == "__main__":

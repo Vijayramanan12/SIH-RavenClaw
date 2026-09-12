@@ -5,7 +5,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "models"))
 
 from mission_profile import MISSION_PROFILE, build_rpm_and_phase_trace  # noqa: E402
 from physics_engine import (  # noqa: E402
-    BASELINE, breach_flags, physics_informed_readings, to_engine_state,
+    BASELINE,
+    breach_flags,
+    calculate_thermodynamics,
+    compute_residuals,
+    physics_informed_readings,
+    to_engine_state,
 )
 
 
@@ -106,3 +111,33 @@ def test_physics_informed_readings_includes_map_inhg():
     assert idle["map_inhg"] == BASELINE["map_idle_inhg"]
     assert cruise["map_inhg"] == BASELINE["map_max_inhg"]
     assert idle["map_inhg"] < cruise["map_inhg"]
+
+
+def test_calculate_thermodynamics():
+    cruise_sensors = physics_informed_readings(BASELINE["rpm_cruise"], 25.0)
+    thermo = calculate_thermodynamics(cruise_sensors)
+    assert thermo["brake_power_kw"] > 0
+    assert thermo["brake_power_hp"] > 0
+    assert thermo["torque_nm"] > 0
+    assert 150 <= thermo["bsfc_g_kwh"] <= 350
+    assert 20.0 <= thermo["thermal_efficiency_pct"] <= 42.0
+    assert thermo["bmep_bar"] > 0
+    assert thermo["volumetric_efficiency_pct"] > 0
+
+
+def test_compute_residuals_healthy_vs_faulted():
+    healthy = physics_informed_readings(BASELINE["rpm_cruise"], 25.0)
+    nominal = dict(healthy)
+
+    # Identical state -> discrepancy should be zero
+    res_healthy = compute_residuals(healthy, nominal)
+    assert res_healthy["discrepancy_score"] == 0.0
+    assert res_healthy["state"] == "nominal"
+
+    # Injected overheating fault -> discrepancy should spike
+    faulted = dict(healthy)
+    faulted["cht_c"] += 35.0
+    faulted["egt_c"] += 60.0
+    res_faulted = compute_residuals(faulted, nominal)
+    assert res_faulted["discrepancy_score"] > 8.0
+    assert res_faulted["state"] == "divergent"

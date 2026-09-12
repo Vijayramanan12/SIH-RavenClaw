@@ -35,7 +35,7 @@ except ImportError:  # running as a flat script rather than a package
 logger = logging.getLogger("twin_core.mqtt_publisher")
 
 SENSOR_COLUMNS = [
-    "rpm", "cht_c", "egt_c", "fuel_flow_lph",
+    "rpm", "map_inhg", "cht_c", "egt_c", "fuel_flow_lph",
     "oil_press_psi", "oil_temp_c", "vibration_g", "ambient_c",
 ]
 

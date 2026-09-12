@@ -22,10 +22,21 @@
 
 ```
 twin-core/
-├── src/
-│   ├── ingestion.py       # reads CSV/stream, yields raw telemetry rows
-│   ├── state_estimator.py # physics-informed state + limit checking
-│   └── api.py             # exposes telemetry_frame (FastAPI stub)
+├── api/
+│   └── twin_api.py        # REST polling API for telemetry_frame (:8001)
+├── models/
+│   ├── physics_engine.py  # physics-informed readings, limits, breach flags
+│   ├── fault_injector.py  # real-time and batch fault injection
+│   └── mission_profile.py # flight phases and RPM target traces
+├── simulator/
+│   ├── live_stream.py     # WebSocket live stream (:8002) + fault injection
+│   ├── unit_generator.py  # stateful cycle simulation + thermal lag
+│   └── dataset_generator.py # batch multi-unit telemetry generation
+├── streaming/
+│   ├── can_emulator.py    # SocketCAN / CAN arbitration ID framing
+│   └── mqtt_publisher.py  # MQTT publisher for live telemetry
+├── config/
+│   └── engine_params.yaml # Rotax 912 baseline specs & limits
 ├── tests/
 └── requirements.txt
 ```
@@ -35,11 +46,17 @@ twin-core/
 ```bash
 cd twin-core
 pip install -r requirements.txt
-python src/api.py
+
+# Option A: Run WebSocket live push stream (port 8002, used by Dashboard)
+python simulator/live_stream.py
+
+# Option B: Run REST polling API (port 8001, used by ml-models /health/live)
+python api/twin_api.py
 ```
 
-This serves `telemetry_frame`s from the sample dataset in `../data/` at
-`http://localhost:8001/telemetry/latest`.
+This serves `telemetry_frame`s at:
+- WebSocket: `ws://localhost:8002/ws/telemetry?unit_id=1`
+- Polling: `http://localhost:8001/telemetry/latest?unit_id=1`
 
 ## Next steps for this group
 

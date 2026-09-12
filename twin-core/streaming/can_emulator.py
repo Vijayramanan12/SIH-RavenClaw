@@ -42,6 +42,7 @@ SIGNAL_MAP = {
     "oil_temp_c":    {"can_id": 0x105, "scale": 10,   "signed": False},
     "vibration_g":   {"can_id": 0x106, "scale": 1000, "signed": False},
     "ambient_c":     {"can_id": 0x107, "scale": 10,   "signed": True},
+    "map_inhg":      {"can_id": 0x108, "scale": 10,   "signed": False},
 }
 
 _UINT16_MAX = 0xFFFF

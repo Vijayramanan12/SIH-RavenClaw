@@ -136,3 +136,125 @@ def breach_flags(frame: dict) -> Dict[str, bool]:
         "oil_press_high": sensors["oil_press_psi"] > limits["oil_press_max_psi"],
         "oil_temp_over": sensors["oil_temp_c"] > limits["oil_temp_max_c"],
     }
+
+
+# Standard deviations for sensor noise normalization in residual distance
+SENSOR_SIGMAS = {
+    "cht_c": 3.0,
+    "egt_c": 10.0,
+    "oil_press_psi": 2.0,
+    "oil_temp_c": 2.0,
+    "vibration_g": 0.1,
+    "fuel_flow_lph": 0.8,
+}
+
+
+def calculate_thermodynamics(sensors: dict) -> Dict[str, float]:
+    """
+    Calculate derived thermodynamic performance indicators for the virtual engine.
+    Estimates parameters that cannot be measured directly with physical sensors:
+      - Brake Power (kW & HP)
+      - Engine Torque (N*m)
+      - Brake Specific Fuel Consumption (BSFC in g/kWh)
+      - Brake Thermal Efficiency (eta_th in %)
+      - Brake Mean Effective Pressure (BMEP in bar)
+      - Volumetric Efficiency (eta_v in %)
+    """
+    import math
+
+    rpm = max(sensors.get("rpm", BASELINE["rpm_idle"]), 100.0)
+    map_inhg = sensors.get("map_inhg", BASELINE.get("map_idle_inhg", 12.0))
+    fuel_flow = max(sensors.get("fuel_flow_lph", 4.0), 0.5)
+    ambient_c = sensors.get("ambient_c", 25.0)
+
+    rated_kw = float(BASELINE.get("rated_power_kw", 73.5))
+    rpm_max = float(BASELINE["rpm_max_cont"])
+    map_max = float(BASELINE.get("map_max_inhg", 28.0))
+    displacement_l = float(BASELINE.get("displacement_l", 1.211))
+    fuel_density = float(BASELINE.get("fuel_density_kg_l", 0.72))
+    fuel_lhv = float(BASELINE.get("fuel_lhv_mj_kg", 43.5))
+
+    # Ambient temperature air-density correction (standard atmospheric temp = 298.15 K)
+    temp_k = max(ambient_c + 273.15, 200.0)
+    density_corr = math.sqrt(298.15 / temp_k)
+
+    # Brake Power (kW) based on RPM fraction, Manifold Absolute Pressure ratio, and air density
+    rpm_ratio = min(max(rpm / rpm_max, 0.0), 1.15)
+    map_ratio = min(max(map_inhg / map_max, 0.1), 1.15)
+    brake_power_kw = rated_kw * rpm_ratio * map_ratio * density_corr
+    brake_power_kw = max(round(brake_power_kw, 2), 1.0)
+    brake_power_hp = round(brake_power_kw * 1.34102, 1)
+
+    # Engine Torque (N*m): Torque = Power / omega = Power / (2*pi*RPM/60)
+    omega = (2.0 * math.pi * rpm) / 60.0
+    torque_nm = round((brake_power_kw * 1000.0) / omega, 1)
+
+    # Fuel mass flow (kg/h and kg/s)
+    fuel_mass_flow_kg_h = fuel_flow * fuel_density
+    fuel_mass_flow_kg_s = fuel_mass_flow_kg_h / 3600.0
+
+    # Brake Specific Fuel Consumption (BSFC in g/kWh)
+    bsfc = round((fuel_mass_flow_kg_h * 1000.0) / brake_power_kw, 1)
+
+    # Brake Thermal Efficiency (eta_th): Power_out / (mass_fuel_rate * LHV)
+    fuel_input_power_kw = fuel_mass_flow_kg_s * (fuel_lhv * 1000.0)
+    thermal_eff_pct = round((brake_power_kw / max(fuel_input_power_kw, 0.1)) * 100.0, 1)
+    thermal_eff_pct = min(max(thermal_eff_pct, 5.0), 45.0)
+
+    # Brake Mean Effective Pressure (BMEP in bar) for 4-stroke engine
+    # BMEP = (2 * Power * 10^3) / ( (RPM/60) * Displacement_m3 ) * 10^-5
+    displacement_m3 = displacement_l * 1e-3
+    bmep_bar = round(((2.0 * brake_power_kw * 1e3) / ((rpm / 60.0) * displacement_m3)) * 1e-5, 2)
+
+    # Volumetric Efficiency (percentage vs 29.92 inHg standard atmosphere)
+    vol_eff_pct = round(min(max((map_inhg / 29.92) * 95.0, 30.0), 99.0), 1)
+
+    return {
+        "brake_power_kw": brake_power_kw,
+        "brake_power_hp": brake_power_hp,
+        "torque_nm": torque_nm,
+        "bsfc_g_kwh": bsfc,
+        "thermal_efficiency_pct": thermal_eff_pct,
+        "bmep_bar": bmep_bar,
+        "volumetric_efficiency_pct": vol_eff_pct,
+    }
+
+
+def compute_residuals(measured_sensors: dict, nominal_sensors: dict) -> Dict[str, any]:
+    """
+    Compute physical residuals between actual engine sensors and the virtual
+    nominal twin (Delta = Sensor_actual - Sensor_nominal).
+    Also derives an aggregate normalized discrepancy score (Mahalanobis z-norm)
+    that indicates physical model divergence before hard limit breaches occur.
+    """
+    import math
+
+    deltas = {}
+    norm_sq = 0.0
+
+    tracked_keys = [
+        ("cht_c", "cht_delta_c"),
+        ("egt_c", "egt_delta_c"),
+        ("oil_press_psi", "oil_press_delta_psi"),
+        ("oil_temp_c", "oil_temp_delta_c"),
+        ("vibration_g", "vibration_delta_g"),
+        ("fuel_flow_lph", "fuel_flow_delta_lph"),
+    ]
+
+    for sensor_key, delta_key in tracked_keys:
+        val_meas = measured_sensors.get(sensor_key, 0.0)
+        val_nom = nominal_sensors.get(sensor_key, 0.0)
+        diff = val_meas - val_nom
+        deltas[delta_key] = round(diff, 3 if sensor_key == "vibration_g" else 1)
+
+        sigma = SENSOR_SIGMAS.get(sensor_key, 1.0)
+        norm_sq += (diff / sigma) ** 2
+
+    discrepancy = round(math.sqrt(norm_sq), 2)
+    state = "nominal" if discrepancy < 3.5 else ("caution" if discrepancy < 7.5 else "divergent")
+
+    return {
+        **deltas,
+        "discrepancy_score": discrepancy,
+        "state": state,
+    }

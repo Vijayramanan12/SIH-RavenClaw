@@ -101,6 +101,53 @@ function ComponentPanel({ telemetry, selectedPart, onSelectPart }) {
         <MetricRow label="Vib" value={engine.vibration.toFixed(1)} unit=" g" level={vibLevel} partKey="vibration" {...rowProps} />
       </div>
 
+      {telemetry.thermodynamics && (
+        <div className="section">
+          <SectionTitle partKey="thermo" {...rowProps}>THERMODYNAMICS</SectionTitle>
+          <MetricRow label="Brake Power" value={telemetry.thermodynamics.brakePowerKw.toFixed(1)} unit=" kW" level="" partKey="thermo" {...rowProps} />
+          <MetricRow label="Torque" value={telemetry.thermodynamics.torqueNm.toFixed(0)} unit=" N·m" level="" partKey="thermo" {...rowProps} />
+          <MetricRow label="Thermal Eff" value={telemetry.thermodynamics.thermalEfficiency.toFixed(1)} unit=" %" level="" partKey="thermo" {...rowProps} />
+          <MetricRow label="BSFC" value={Math.round(telemetry.thermodynamics.bsfc)} unit=" g/kWh" level="" partKey="thermo" {...rowProps} />
+        </div>
+      )}
+
+      {telemetry.residuals && (
+        <div className="section">
+          <SectionTitle partKey="observer" {...rowProps}>TWIN OBSERVER</SectionTitle>
+          <StatusRow
+            label="Observer Fit"
+            status={telemetry.residuals.state.toUpperCase()}
+            tone={telemetry.residuals.state === 'nominal' ? 'normal' : telemetry.residuals.state === 'caution' ? 'caution' : 'critical'}
+            partKey="observer"
+            {...rowProps}
+          />
+          <MetricRow
+            label="Δ CHT"
+            value={(telemetry.residuals.chtDelta > 0 ? '+' : '') + telemetry.residuals.chtDelta.toFixed(1)}
+            unit="°C"
+            level={Math.abs(telemetry.residuals.chtDelta) > 15 ? 'critical' : Math.abs(telemetry.residuals.chtDelta) > 5 ? 'warn' : ''}
+            partKey="cht"
+            {...rowProps}
+          />
+          <MetricRow
+            label="Δ EGT"
+            value={(telemetry.residuals.egtDelta > 0 ? '+' : '') + telemetry.residuals.egtDelta.toFixed(1)}
+            unit="°C"
+            level={Math.abs(telemetry.residuals.egtDelta) > 30 ? 'critical' : Math.abs(telemetry.residuals.egtDelta) > 10 ? 'warn' : ''}
+            partKey="egt"
+            {...rowProps}
+          />
+          <MetricRow
+            label="Discrepancy"
+            value={telemetry.residuals.discrepancyScore.toFixed(2)}
+            unit=" σ"
+            level={telemetry.residuals.discrepancyScore > 7.5 ? 'critical' : telemetry.residuals.discrepancyScore > 3.5 ? 'warn' : ''}
+            partKey="observer"
+            {...rowProps}
+          />
+        </div>
+      )}
+
       <div className="section">
         <SectionTitle partKey="battery" {...rowProps}>BATTERY</SectionTitle>
         <MetricRow label="Voltage" value={battery.voltage.toFixed(1)} unit=" V" level={battVoltLevel} partKey="battery" {...rowProps} />

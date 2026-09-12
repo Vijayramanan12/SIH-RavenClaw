@@ -24,6 +24,7 @@ def test_step_produces_telemetry_frame_shape():
     frame = sim.step()
     assert frame["unit_id"] == 1
     assert frame["cycle"] == 0
+    assert "timestamp" in frame
     assert isinstance(frame["phase"], str)
     assert set(frame["sensors"]) == {
         "rpm", "cht_c", "egt_c", "fuel_flow_lph", "map_inhg",

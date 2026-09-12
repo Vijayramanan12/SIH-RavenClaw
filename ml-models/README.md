@@ -37,8 +37,13 @@ ml-models/
 cd ml-models
 pip install -r requirements.txt
 python src/rul_model.py          # trains a baseline model on ../data/engine_telemetry_dataset.csv
-python src/inference_api.py      # serves health_report at http://localhost:8002/health/latest
+python src/inference_api.py      # serves health_report at http://localhost:8003/health/latest
 ```
+
+The live dashboard sends each WebSocket telemetry frame to
+`POST /health/score` on port 8003. This scores the exact displayed frame
+with the three trained artifacts; port 8002 remains reserved for
+`twin-core/simulator/live_stream.py`.
 
 ## Notes on the dataset
 

@@ -16,6 +16,21 @@ export const initialTelemetry = {
     vibration: 2.1, // g
   },
 
+  thermodynamics: {
+    brakePowerKw: 48.2,
+    brakePowerHp: 64.6,
+    torqueNm: 92.4,
+    bsfc: 282,
+    thermalEfficiency: 29.4,
+  },
+
+  residuals: {
+    discrepancyScore: 0.65,
+    state: 'nominal',
+    chtDelta: 0.4,
+    egtDelta: 1.2,
+  },
+
   battery: {
     voltage: 24.6,
     current: 18.4,
@@ -120,10 +135,34 @@ export function nextDemoFrame(prev) {
   const now = new Date();
   const time = now.toTimeString().slice(0, 8);
 
+  const brakePowerKw = clamp(Number(((rpm / 5500) * 73.5 * 0.9).toFixed(1)), 8, 73);
+  const brakePowerHp = clamp(Number((brakePowerKw * 1.341).toFixed(1)), 10, 98);
+  const torqueNm = clamp(Number(((brakePowerKw * 1000) / ((2 * Math.PI * rpm) / 60)).toFixed(1)), 40, 130);
+  const thermalEfficiency = clamp(Number(jitter(prev.thermodynamics?.thermalEfficiency ?? 29.4, 0.2).toFixed(1)), 22, 33);
+  const bsfc = clamp(Math.round(jitter(prev.thermodynamics?.bsfc ?? 282, 2)), 240, 320);
+
+  const discrepancyScore = Number(
+    (0.5 + (cht > THRESHOLDS.cht.warn ? 3.5 : 0) + (vibration > THRESHOLDS.vibration.warn ? 4.0 : 0)).toFixed(2)
+  );
+  const resState = discrepancyScore < 3.5 ? 'nominal' : discrepancyScore < 7.5 ? 'caution' : 'divergent';
+
   return {
     ...prev,
     timestamp: Date.now(),
     engine: { rpm, cht, egt, oilPressure, vibration },
+    thermodynamics: {
+      brakePowerKw,
+      brakePowerHp,
+      torqueNm,
+      bsfc,
+      thermalEfficiency,
+    },
+    residuals: {
+      discrepancyScore,
+      state: resState,
+      chtDelta: Number((cht - 160).toFixed(1)),
+      egtDelta: Number((egt - 640).toFixed(1)),
+    },
     battery: { voltage, current, temp: battTemp },
     propulsion: {
       status: vibration > THRESHOLDS.vibration.warn ? 'CAUTION' : 'NORMAL',

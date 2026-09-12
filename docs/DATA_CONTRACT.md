@@ -1,6 +1,6 @@
 # Data Contract
 
-**schema_version: 1.2**
+**schema_version: 1.3**
 
 This is the shared interface between `twin-core`, `ml-models`, and
 `dashboard`. All three groups should treat this file as the source of truth
@@ -66,6 +66,25 @@ One synchronized snapshot of engine state, emitted per cycle. JSON shape:
     "oil_temperature_c": 99.6,
     "fuel_flow_lph": 14.8,
     "vibration_g": 0.51
+  },
+  "thermodynamics": {
+    "brake_power_kw": 62.16,
+    "brake_power_hp": 83.4,
+    "torque_nm": 118.7,
+    "bsfc_g_kwh": 171.4,
+    "thermal_efficiency_pct": 28.5,
+    "bmep_bar": 10.02,
+    "volumetric_efficiency_pct": 76.5
+  },
+  "residuals": {
+    "cht_delta_c": 0.8,
+    "egt_delta_c": 2.1,
+    "oil_press_delta_psi": -0.4,
+    "oil_temp_delta_c": 0.5,
+    "vibration_delta_g": 0.012,
+    "fuel_flow_delta_lph": 0.1,
+    "discrepancy_score": 0.84,
+    "state": "nominal"
   }
 }
 ```
@@ -133,6 +152,10 @@ If a field must change (rename, new unit, new fault mode, etc.):
 3. Ping the other two groups before merging — they consume this shape.
 
 ### Changelog
+- **1.3** — added `thermodynamics` block (derived Brake Power, Torque, BSFC,
+  Thermal Efficiency, BMEP, Volumetric Efficiency) and `residuals` block
+  (physical delta between actual engine sensors and parallel virtual nominal twin,
+  plus normalized discrepancy score) for true physics-informed digital twin monitoring.
 - **1.2** — added `sensors.map_inhg` (Manifold Absolute Pressure). Also:
   thermal lag on `cht_c`/`oil_temp_c` now cold-starts at ambient temperature
   and is applied *after* fault injection (previously a fault's temperature

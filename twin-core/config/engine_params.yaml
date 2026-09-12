@@ -33,3 +33,9 @@ map_max_inhg: 28.0
 # everything else reacts to RPM changes fast enough to treat as instantaneous.
 cht_thermal_alpha: 0.03
 oil_temp_thermal_alpha: 0.02
+
+# Thermodynamic baseline specs (Rotax 912 UL / ULS 4-stroke aero piston engine)
+displacement_l: 1.211      # 1211 cm^3
+rated_power_kw: 73.5       # ~100 HP @ 5800 RPM
+fuel_lhv_mj_kg: 43.5       # Lower Heating Value for aviation gasoline (MJ/kg)
+fuel_density_kg_l: 0.72    # Avgas/Mogas density (kg/L)

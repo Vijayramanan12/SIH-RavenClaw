@@ -119,6 +119,10 @@ async def ws_telemetry(websocket: WebSocket, unit_id: int = 1):
             # inertia rather than jumping instantly
             frame["sensors"] = simulator.apply_thermal_lag(frame["sensors"])
 
+            obs = simulator.observe(frame["sensors"])
+            frame["residuals"] = obs["residuals"]
+            frame["thermodynamics"] = obs["thermodynamics"]
+
             frame["breach_flags"] = breach_flags(frame)
             frame["engine_state"] = to_engine_state(frame["sensors"])
             await websocket.send_json(frame)

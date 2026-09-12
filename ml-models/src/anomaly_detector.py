@@ -39,10 +39,19 @@ def load_model():
 
 
 def predict(df: pd.DataFrame) -> pd.DataFrame:
-    """Adds is_anomalous (bool) and anomaly_score (float, higher = more normal)."""
+    """Adds is_anomalous (bool) and anomaly_score (float, higher = MORE anomalous).
+
+    sklearn's IsolationForest.decision_function() returns higher = more
+    normal (inlier), which is the opposite of what a field literally named
+    "anomaly_score" should mean to a downstream consumer (dashboard, this
+    health_report's `anomaly.score` field). Sign is flipped here so the
+    convention is consistent everywhere it's used -- verified: without the
+    flip, mean anomaly_score for overheating-fault rows (0.108) was LOWER
+    than for healthy rows (0.119), i.e. faulty engines looked healthier.
+    """
     model, cols = load_model()
     df = df.copy()
-    df["anomaly_score"] = model.decision_function(df[cols])
+    df["anomaly_score"] = -model.decision_function(df[cols])
     df["is_anomalous"] = model.predict(df[cols]) == -1
     return df
 

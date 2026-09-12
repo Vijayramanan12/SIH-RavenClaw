@@ -47,6 +47,8 @@ export const PART_MAP = {
   propulsion: { label: 'Propulsion / propeller', keywords: [], modeled: false },
   flightControl: { label: 'Flight controller', keywords: [], modeled: false },
   sensors: { label: 'GPS / sensors', keywords: [], modeled: false },
+  thermo: { label: 'Thermodynamic cycle model', keywords: [], modeled: false },
+  observer: { label: 'Physics residual observer', keywords: [], modeled: false },
 };
 
 export function findMatchingMeshes(root, key) {

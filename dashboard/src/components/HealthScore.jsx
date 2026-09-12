@@ -60,7 +60,7 @@ function HealthScore({ health }) {
         <div className="health-substats">
           <div className="health-substat">
             <div className="label">RUL</div>
-            <div className="value">{rulHours} HRS</div>
+            <div className="value">{rulHours} CYCLES</div>
           </div>
           <div className="health-substat">
             <div className="label">CONFIDENCE</div>

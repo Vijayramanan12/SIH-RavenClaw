@@ -13,9 +13,8 @@ import joblib
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
-from sklearn.model_selection import GroupShuffleSplit
 
-from features import add_rolling_features, feature_columns, load_dataset
+from features import add_rolling_features, feature_columns, load_dataset, stratified_group_split
 
 ARTIFACT_PATH = Path(__file__).resolve().parents[1] / "artifacts" / "fault_classifier.joblib"
 
@@ -26,9 +25,14 @@ def train(df: pd.DataFrame = None) -> RandomForestClassifier:
 
     cols = feature_columns(df)
 
-    splitter = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    train_idx, test_idx = next(splitter.split(df, groups=df["unit_id"]))
-    train_df, test_df = df.iloc[train_idx], df.iloc[test_idx]
+    # NOTE: plain GroupShuffleSplit doesn't stratify by class -- with only
+    # 8 units for some fault types, that risks a fault type landing with
+    # zero test units (verified: with this file's own random_state=42,
+    # plain GroupShuffleSplit puts "overheating" in the test set with 0
+    # units, silently dropping it from classification_report entirely).
+    # stratified_group_split (already used by rul_model.py) guarantees
+    # every fault_mode gets proportional representation in both splits.
+    train_df, test_df = stratified_group_split(df, test_size=0.2, random_state=42)
 
     model = RandomForestClassifier(
         n_estimators=300, max_depth=12, random_state=42, n_jobs=-1, class_weight="balanced"
